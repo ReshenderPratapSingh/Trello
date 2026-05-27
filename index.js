@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const {Pool} = require("pg");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const app = express();
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
@@ -35,4 +36,33 @@ app.post("/signup", async (req, res) => {
         }
     }
 });
+app.post("/signin", async(req, res) => {
+    const username = req.body.username;
+    const password = req.body.password;
+
+    const response = await pool.query(`SELECT * FROM users WHERE username = $1`, [username]);
+    const userExists = response.rows[0];
+    if(!userExists) {
+        return res.status(404).json({
+            message: "user not found"
+        })
+    } else {
+        const isPasswordCorrect = await bcrypt.compare(password, userExists.password);
+        if(isPasswordCorrect) {
+
+            const token = jwt.sign({
+                userId: userExists.id
+            }, "pratap");
+
+            res.status(201).json({
+                message: "signin successful!",
+                token: token
+            });
+        } else {
+            res.status(400).json({
+                message: "incorrect password!"
+            });
+        }
+    }
+})
 app.listen(3000);
