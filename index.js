@@ -3,16 +3,38 @@ const express = require("express");
 const {Pool} = require("pg");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const z = require("zod");
+
 const app = express();
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
 
+const SignupSchema = z.object({
+    username: z.string().min(3),
+    email: z.email(),
+    password: z.string().min(8)
+});
+
+const SigninSchema = z.object({
+    username: z.string().min(3),
+    password: z.string().min(8)
+});
+
 app.use(express.json());
+
 app.post("/signup", async (req, res) => {
-    const username = req.body.username;
-    const email = req.body.email;
-    const password = req.body.password;
+    const {data, success, error} = SignupSchema.safeParse(req.body);
+    if(!success){
+        return res.status(400).json({
+            message: "invalid inputs",
+            error: JSON.parse(error)
+        });
+    }
+
+    const username = data.username;
+    const email = data.email;
+    const password = data.password;
     const hashedPassword = await bcrypt.hash(password, 10);
     try {
         const response = await pool.query(
@@ -36,9 +58,18 @@ app.post("/signup", async (req, res) => {
         }
     }
 });
+
 app.post("/signin", async(req, res) => {
-    const username = req.body.username;
-    const password = req.body.password;
+    const {data, success, error} = SigninSchema.safeParse(req.body);
+    if(!success) {
+        return res.status(400).json({
+            mesasge: "invalid input",
+            error : JSON.parse(error)
+        })
+    }
+
+    const username = data.username;
+    const password = data.password;
 
     const response = await pool.query(`SELECT * FROM users WHERE username = $1`, [username]);
     const userExists = response.rows[0];
@@ -65,4 +96,5 @@ app.post("/signin", async(req, res) => {
         }
     }
 })
+
 app.listen(3000);
