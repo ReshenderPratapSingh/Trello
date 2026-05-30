@@ -4,7 +4,8 @@ const {Pool} = require("pg");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const z = require("zod");
-
+const { id } = require("zod/locales");
+const {authMiddleware} = require("./middleware");
 const app = express();
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
@@ -20,6 +21,11 @@ const SigninSchema = z.object({
     username: z.string().min(3),
     password: z.string().min(8)
 });
+
+const createOrgSchema = z.object({
+    name: z.string(),
+    description: z.string().max(100)
+})
 
 app.use(express.json());
 
@@ -97,4 +103,38 @@ app.post("/signin", async(req, res) => {
     }
 })
 
+app.post("/create-organisation", authMiddleware,  async(req, res) => {
+    const {data, success, error} = createOrgSchema.safeParse(req.body);
+
+    if(!success) {
+        res.status(400).json({
+            message: "invalid inputs",
+            error: JSON.parse(error)
+        });
+    }
+
+    const organisationName = data.name;
+    const description = data.description;
+
+    try {
+        const response = await pool.query(
+            `INSERT INTO organisations (name, description) VALUES ($1, $2) RETURNING id`,
+            [organisationName, description]
+        );
+
+        res.status(201).json({
+            mesasge: "orgnisation added!",
+            orgId: response.rows[0].id
+        })
+    } catch(error) {
+        if(error.code == "23505") {
+            if(error.constraint == "organisations_name_key") {
+                return res.status(409).json({message: "organisation name already exist"});
+            }
+        } else {
+            return res.status(500).json({message: "something went wrong"});
+        }
+    }
+
+})
 app.listen(3000);
