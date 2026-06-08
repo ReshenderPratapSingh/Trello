@@ -121,10 +121,17 @@ app.post("/create-organisation", authMiddleware,  async(req, res) => {
             `INSERT INTO organisations (name, description) VALUES ($1, $2) RETURNING id`,
             [organisationName, description]
         );
+        
+        const orgId = response.rows[0].id;
+        const userId = req.userId;
+
+        await pool.query(
+            `INSERT INTO members (user_id, org_id, role) VALUES ($1, $2, 'admin')`,
+            [userId, orgId]
+        );
 
         res.status(201).json({
             mesasge: "orgnisation added!",
-            orgId: response.rows[0].id
         })
     } catch(error) {
         if(error.code == "23505") {
