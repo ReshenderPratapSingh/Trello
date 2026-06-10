@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const z = require("zod");
 const { id } = require("zod/locales");
-const {authMiddleware} = require("./middleware");
+const {authMiddleware, adminMiddleware} = require("./middleware");
 const app = express();
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
@@ -26,6 +26,10 @@ const createOrgSchema = z.object({
     name: z.string(),
     description: z.string().max(100)
 })
+
+const addMemberSchema = z.object({
+    email: z.email()
+});
 
 app.use(express.json());
 
@@ -144,4 +148,49 @@ app.post("/create-organisation", authMiddleware,  async(req, res) => {
     }
 
 })
+
+app.post("/organisation/:orgId/add-member", authMiddleware, adminMiddleware, async(req, res) => {
+    const{data, success, error} = addMemberSchema.safeParse(req.body);
+    if(!success) {
+        return res.status(400).json({
+            message: "invalid inputs",
+            error: JSON.parse(error)
+        });
+    }
+    const email = data.email;
+    try{
+        const response = await pool.query(
+            `SELECT * FROM users
+            WHERE email = $1`,
+            [email]
+        );
+        if(!response.rows[0]) {
+            return res.status(404).json({
+                message: "user not found"
+            });
+        }
+        const memberId = response.rows[0].id;
+        const orgId = req.params.orgId;
+
+        const isMember = await pool.query(
+            `SELECT * FROM members
+            WHERE user_id = $1 AND org_id = $2`,
+            [memberId, orgId]
+        );
+
+        if(isMember.rows[0]) {
+            return res.status(409).json({message: "user is alreday a part of your organisation"});
+        }
+        
+        await pool.query(
+            `INSERT INTO members (user_id, org_id, role) VALUES ($1, $2, 'member')`,
+            [memberId, orgId]
+        );
+
+        res.status(201).json({message: "member added"});
+    } catch(error) {
+        return res.status(500).json({message: "something went wrong"});
+    }
+    
+});
 app.listen(3000);
