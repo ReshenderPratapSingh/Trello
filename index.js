@@ -31,6 +31,11 @@ const addMemberSchema = z.object({
     email: z.email()
 });
 
+const createBoardSchema = z.object({
+    name: z.string().min(3),
+    description: z.string().max(1000)
+})
+
 app.use(express.json());
 
 app.post("/signup", async (req, res) => {
@@ -193,4 +198,32 @@ app.post("/organisation/:orgId/add-member", authMiddleware, adminMiddleware, asy
     }
     
 });
+
+app.post("/organisation/:orgId/create-board", authMiddleware, adminMiddleware, async(req, res) => {
+    const{data, success, error} = createBoardSchema.safeParse(req.body);
+
+    if(!success) {
+        return res.status(400).json({
+            message: "invalid input",
+            error: JSON.parse(error)
+        });
+    }
+
+    const name = req.body.name;
+    const description = req.body.description;
+    const orgId = req.params.orgId;
+
+    try{
+        await pool.query(
+            `INSERT INTO boards (name, description, org_id) VALUES ($1, $2, $3)`,
+            [name, description, orgId]
+        );
+
+        res.status(201).json({
+            message:"board added"
+        });
+    } catch(error) {
+        return res.status(500).json({message: "something went wrong"});
+    }
+})
 app.listen(3000);
