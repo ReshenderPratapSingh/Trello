@@ -31,6 +31,10 @@ const addMemberSchema = z.object({
     email: z.email()
 });
 
+const addIssueSchema = z.object({
+    name: z.string()
+});
+
 const createBoardSchema = z.object({
     name: z.string().min(3),
     description: z.string().max(1000)
@@ -225,5 +229,31 @@ app.post("/organisation/:orgId/create-board", authMiddleware, adminMiddleware, a
     } catch(error) {
         return res.status(500).json({message: "something went wrong"});
     }
-})
+});
+
+app.post("/organisation/:orgId/Board/:boardId/create-issue", authMiddleware, adminMiddleware, async(req, res) => {
+    const{data, success, error} = addIssueSchema.safeParse(req.body);
+    if(!success) {
+        return res.status(400).json({
+            message: "invalid input",
+            error: JSON.parse(error)
+        });
+    }
+    const name = data.name;
+    const orgId = req.params.orgId;
+    const boardId = req.params.boardId;
+
+    try{
+        await pool.query(
+            `INSERT INTO issues (name, board_id) VALUES($1, $2)`,
+            [name, boardId]
+        );
+        res.status(201).json({
+            message: "issue added"
+        });
+    } catch(error) {
+        res.status(500).json({message: "something went wrong"});
+    }
+});
+
 app.listen(3000);
